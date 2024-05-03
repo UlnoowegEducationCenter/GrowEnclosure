@@ -42,3 +42,53 @@ def lcddisplay(text1, text2, colour_text): #define lcddisplay function to displa
     lcd.cursor_position(0,1)
     lcd.message = text2
     
+
+
+def lcddisplay_menu():
+    lcd.clear()
+    lcd.message = "1. Set Watering\n2. Set Schedule\n3. Exit"
+
+    selected_option = 1  # Initialize the selected option
+
+    while True:
+        if lcd.up_button:
+            # Handle up button press
+            selected_option -= 1  # Move to the previous menu option
+        elif lcd.down_button:
+            # Handle down button press
+            selected_option += 1  # Move to the next menu option
+        elif lcd.select_button:
+            # Handle select button press
+            if selected_option == 1:
+                set_watering_parameters()  # Call a function to set watering parameters
+            elif selected_option == 2:
+                set_schedule_parameters()  # Call a function to set schedule parameters
+            elif selected_option == 3:
+                return  # Exit the menu
+
+        # Ensure the selected option stays within the menu range
+        selected_option = max(1, min(selected_option, 3))
+
+        # Update the LCD display with the current menu and selected option
+        update_lcd_menu(selected_option)
+
+
+        
+        # time.sleep(0.2)  # Adjust sleep time as needed for button responsiveness
+
+def update_lcd_menu(selected_option):
+    # Update the LCD display based on the selected option
+    if selected_option == 1:
+        lcd.message = "Set Watering\nVolume: XXX mL"  # Show current watering volume
+    elif selected_option == 2:
+        lcd.message = "Set Schedule\nCheck Time: hh:mm"  # Show current check time
+    elif selected_option == 3:
+        lcd.message = "Exit Menu"
+
+def set_watering_parameters():
+    # Logic to set watering parameters
+    pass
+
+def set_schedule_parameters():
+    # Logic to set schedule parameters
+    pass
