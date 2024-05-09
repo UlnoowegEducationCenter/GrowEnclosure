@@ -42,8 +42,6 @@ def lcddisplay(text1, text2, colour_text): #define lcddisplay function to displa
     lcd.cursor_position(0,1)
     lcd.message = text2
     
-
-
 def lcddisplay_menu():
     lcd.clear()
     lcd.message = "1. Set Watering\n2. Set Schedule\n3. Exit"
@@ -73,8 +71,10 @@ def lcddisplay_menu():
         update_lcd_menu(selected_option)
 
 
-        
+
         # time.sleep(0.2)  # Adjust sleep time as needed for button responsiveness
+
+lcddisplay_menu()
 
 def update_lcd_menu(selected_option):
     # Update the LCD display based on the selected option
