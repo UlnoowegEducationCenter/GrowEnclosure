@@ -20,10 +20,10 @@ class PlantDef:
 
 testPlant = PlantDef(
     name      = 'testPlant',
-    dryValue  = 800,
-    maxTemp   = 30,
-    maxHumid  = 90,
-    waterVol  = 600,
+    dryValue  = 800, # 100
+    maxTemp   = 30, #up by 1 
+    maxHumid  = 90, #5 % 
+    waterVol  = 600, #10
     checkTime = (12,00), # use 24h time!
     sunrise   = (7,00), #Cannot use 07 - leading zeroes not permitted
     sunset    = (19,00)
