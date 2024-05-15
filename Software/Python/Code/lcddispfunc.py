@@ -1,19 +1,8 @@
 import board
 import time
 from adafruit_character_lcd.character_lcd_rgb_i2c import Character_LCD_RGB_I2C
-from addclass import PlantDef  # Ensure this import statement matches your setup
+from addclass import testPlant  # Ensure this import statement matches your setup
 
-# Initialize the plant
-testPlant = PlantDef(
-    name='testPlant',
-    dryValue=800,
-    maxTemp=30,
-    maxHumid=90,
-    waterVol=600,
-    checkTime=(12, 0),
-    sunrise=(7, 0),
-    sunset=(19, 0)
-)
 
 i2c = board.I2C()  # uses board.SCL and board.SDA
 lcd = Character_LCD_RGB_I2C(i2c, 16, 2)
@@ -94,12 +83,16 @@ def adjust_time_parameter(parameter_name):
             break
         time.sleep(0.2)  # Reduce refresh rate to minimize jitter
 
+def display_menu(options, index):
+    """Helper function to display menu options with the current selection on the bottom line."""
+    lcd.clear()
+    lcd.message = f"Select Option:\n{options[index][:16]}"
+
 def main_menu():
     """Function to navigate between different settings."""
     options = ['Edit Settings', 'Manual Control']
     index = 0
-    lcd.clear()
-    lcd.message = f"Select: {options[index]}"
+    display_menu(options, index)
     while True:
         update = False
         if lcd.up_button:
@@ -111,23 +104,21 @@ def main_menu():
             index = (index + 1) % len(options)
             update = True
         if update:
-            lcd.message = f"Select: {options[index]}"
+            display_menu(options, index)
         elif lcd.select_button:
             debounce(lambda: lcd.select_button)
             if options[index] == 'Edit Settings':
                 edit_settings_menu()
             elif options[index] == 'Manual Control':
                 manual_control_menu()
-            lcd.clear()
-            lcd.message = f"Select: {options[index]}"
+            display_menu(options, index)
             time.sleep(0.5)  # Pause before returning to menu
 
 def edit_settings_menu():
     """Function to navigate and edit settings."""
     options = ['System Time', 'Sunrise Time', 'Sunset Time', 'Irrigation', 'Temp Setpoint', 'Humidity Setpoint', 'Camera Yes/No', 'Back']
     index = 0
-    lcd.clear()
-    lcd.message = f"Edit: {options[index]}"
+    display_menu(options, index)
     while True:
         update = False
         if lcd.up_button:
@@ -139,7 +130,7 @@ def edit_settings_menu():
             index = (index + 1) % len(options)
             update = True
         if update:
-            lcd.message = f"Edit: {options[index]}"
+            display_menu(options, index)
         elif lcd.select_button:
             debounce(lambda: lcd.select_button)
             if options[index] == 'System Time':
@@ -159,16 +150,14 @@ def edit_settings_menu():
                 pass
             elif options[index] == 'Back':
                 break
-            lcd.clear()
-            lcd.message = f"Edit: {options[index]}"
+            display_menu(options, index)
             time.sleep(0.5)  # Pause before returning to menu
 
 def irrigation_menu():
     """Function to navigate and edit irrigation settings."""
     options = ['Soil Moist Thresh', 'Water Vol', 'Watering Time', 'Back']
     index = 0
-    lcd.clear()
-    lcd.message = f"Edit: {options[index]}"
+    display_menu(options, index)
     while True:
         update = False
         if lcd.up_button:
@@ -180,7 +169,7 @@ def irrigation_menu():
             index = (index + 1) % len(options)
             update = True
         if update:
-            lcd.message = f"Edit: {options[index]}"
+            display_menu(options, index)
         elif lcd.select_button:
             debounce(lambda: lcd.select_button)
             if options[index] == 'Soil Moist Thresh':
@@ -191,16 +180,14 @@ def irrigation_menu():
                 adjust_time_parameter('checkTime')  # Adjust time
             elif options[index] == 'Back':
                 break
-            lcd.clear()
-            lcd.message = f"Edit: {options[index]}"
+            display_menu(options, index)
             time.sleep(0.5)  # Pause before returning to menu
 
 def manual_control_menu():
     """Function to handle manual controls."""
     options = ['Take Picture Now', 'Water Now', 'Light On Now', 'Fan On Now', 'Back']
     index = 0
-    lcd.clear()
-    lcd.message = f"Control: {options[index]}"
+    display_menu(options, index)
     while True:
         update = False
         if lcd.up_button:
@@ -212,7 +199,7 @@ def manual_control_menu():
             index = (index + 1) % len(options)
             update = True
         if update:
-            lcd.message = f"Control: {options[index]}"
+            display_menu(options, index)
         elif lcd.select_button:
             debounce(lambda: lcd.select_button)
             if options[index] == 'Take Picture Now':
@@ -229,8 +216,7 @@ def manual_control_menu():
                 pass
             elif options[index] == 'Back':
                 break
-            lcd.clear()
-            lcd.message = f"Control: {options[index]}"
+            display_menu(options, index)
             time.sleep(0.5)  # Pause before returning to menu
 
 # Main loop
