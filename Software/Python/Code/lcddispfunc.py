@@ -10,9 +10,9 @@ testPlant = PlantDef(
     maxTemp=30,
     maxHumid=90,
     waterVol=600,
-    checkTime=(12, 00),
-    sunrise=(7, 00),
-    sunset=(19, 00)
+    checkTime=(12, 0),
+    sunrise=(7, 0),
+    sunset=(19, 0)
 )
 
 i2c = board.I2C()  # uses board.SCL and board.SDA
@@ -34,54 +34,212 @@ def debounce(button):
 def adjust_parameter(parameter_name, step, min_val, max_val):
     """General function to adjust a numerical parameter."""
     value = getattr(testPlant, parameter_name)
-    lcd.clear()
-    lcd.message = f"{parameter_name}: {value}\nUp/Down to change"
-    adjusting = True
-    while adjusting:
+    message = f"{parameter_name}: {value}  "
+    lcd.message = message
+    while True:
+        update = False
         if lcd.up_button:
             debounce(lambda: lcd.up_button)
             value = min(value + step, max_val)
-            lcd.message = f"{parameter_name}: {value}\nUp/Down to change"
+            update = True
         elif lcd.down_button:
             debounce(lambda: lcd.down_button)
             value = max(value - step, min_val)
-            lcd.message = f"{parameter_name}: {value}\nUp/Down to change"
+            update = True
+        if update:
+            message = f"{parameter_name}: {value}  "
+            lcd.message = message
         elif lcd.select_button:
             debounce(lambda: lcd.select_button)
             setattr(testPlant, parameter_name, value)
-            lcd.clear()
-            lcd.message = f"{parameter_name} set to {value}"
+            message = f"Set to {value}    "
+            lcd.message = message
             time.sleep(1)  # Show the set message
-            adjusting = False
+            break
+        time.sleep(0.2)  # Reduce refresh rate to minimize jitter
+
+def adjust_time_parameter(parameter_name):
+    """Function to adjust time parameters (HH:MM)."""
+    value = getattr(testPlant, parameter_name)
+    hours, minutes = value
+    message = f"{parameter_name}: {hours:02d}:{minutes:02d}  "
+    lcd.message = message
+    while True:
+        update = False
+        if lcd.up_button:
+            debounce(lambda: lcd.up_button)
+            hours = (hours + 1) % 24
+            update = True
+        elif lcd.down_button:
+            debounce(lambda: lcd.down_button)
+            hours = (hours - 1) % 24
+            update = True
+        elif lcd.right_button:
+            debounce(lambda: lcd.right_button)
+            minutes = (minutes + 1) % 60
+            update = True
+        elif lcd.left_button:
+            debounce(lambda: lcd.left_button)
+            minutes = (minutes - 1) % 60
+            update = True
+        if update:
+            message = f"{parameter_name}: {hours:02d}:{minutes:02d}  "
+            lcd.message = message
+        elif lcd.select_button:
+            debounce(lambda: lcd.select_button)
+            setattr(testPlant, parameter_name, (hours, minutes))
+            message = f"Set to {hours:02d}:{minutes:02d}  "
+            lcd.message = message
+            time.sleep(1)  # Show the set message
+            break
         time.sleep(0.2)  # Reduce refresh rate to minimize jitter
 
 def main_menu():
     """Function to navigate between different settings."""
-    options = ['Max Humid', 'Water Vol']
+    options = ['Edit Settings', 'Manual Control']
     index = 0
+    lcd.clear()
     lcd.message = f"Select: {options[index]}"
     while True:
+        update = False
         if lcd.up_button:
             debounce(lambda: lcd.up_button)
             index = (index - 1) % len(options)
-            lcd.message = f"Select: {options[index]}"
+            update = True
         elif lcd.down_button:
             debounce(lambda: lcd.down_button)
             index = (index + 1) % len(options)
+            update = True
+        if update:
             lcd.message = f"Select: {options[index]}"
         elif lcd.select_button:
             debounce(lambda: lcd.select_button)
-            if options[index] == 'Max Humid':
-                adjust_parameter('maxHumid', 5, 0, 100)
-            elif options[index] == 'Water Vol':
-                adjust_parameter('waterVol', 10, 0, 1000)
+            if options[index] == 'Edit Settings':
+                edit_settings_menu()
+            elif options[index] == 'Manual Control':
+                manual_control_menu()
             lcd.clear()
             lcd.message = f"Select: {options[index]}"
+            time.sleep(0.5)  # Pause before returning to menu
+
+def edit_settings_menu():
+    """Function to navigate and edit settings."""
+    options = ['System Time', 'Sunrise Time', 'Sunset Time', 'Irrigation', 'Temp Setpoint', 'Humidity Setpoint', 'Camera Yes/No', 'Back']
+    index = 0
+    lcd.clear()
+    lcd.message = f"Edit: {options[index]}"
+    while True:
+        update = False
+        if lcd.up_button:
+            debounce(lambda: lcd.up_button)
+            index = (index - 1) % len(options)
+            update = True
+        elif lcd.down_button:
+            debounce(lambda: lcd.down_button)
+            index = (index + 1) % len(options)
+            update = True
+        if update:
+            lcd.message = f"Edit: {options[index]}"
+        elif lcd.select_button:
+            debounce(lambda: lcd.select_button)
+            if options[index] == 'System Time':
+                adjust_time_parameter('checkTime')  # Adjust time
+            elif options[index] == 'Sunrise Time':
+                adjust_time_parameter('sunrise')  # Adjust time
+            elif options[index] == 'Sunset Time':
+                adjust_time_parameter('sunset')  # Adjust time
+            elif options[index] == 'Irrigation':
+                irrigation_menu()
+            elif options[index] == 'Temp Setpoint':
+                adjust_parameter('maxTemp', 1, 0, 50)
+            elif options[index] == 'Humidity Setpoint':
+                adjust_parameter('maxHumid', 5, 0, 100)
+            elif options[index] == 'Camera Yes/No':
+                # Add camera toggle functionality here
+                pass
+            elif options[index] == 'Back':
+                break
+            lcd.clear()
+            lcd.message = f"Edit: {options[index]}"
+            time.sleep(0.5)  # Pause before returning to menu
+
+def irrigation_menu():
+    """Function to navigate and edit irrigation settings."""
+    options = ['Soil Moist Thresh', 'Water Vol', 'Watering Time', 'Back']
+    index = 0
+    lcd.clear()
+    lcd.message = f"Edit: {options[index]}"
+    while True:
+        update = False
+        if lcd.up_button:
+            debounce(lambda: lcd.up_button)
+            index = (index - 1) % len(options)
+            update = True
+        elif lcd.down_button:
+            debounce(lambda: lcd.down_button)
+            index = (index + 1) % len(options)
+            update = True
+        if update:
+            lcd.message = f"Edit: {options[index]}"
+        elif lcd.select_button:
+            debounce(lambda: lcd.select_button)
+            if options[index] == 'Soil Moist Thresh':
+                adjust_parameter('dryValue', 10, 0, 1000)
+            elif options[index] == 'Water Vol':
+                adjust_parameter('waterVol', 10, 0, 1000)
+            elif options[index] == 'Watering Time':
+                adjust_time_parameter('checkTime')  # Adjust time
+            elif options[index] == 'Back':
+                break
+            lcd.clear()
+            lcd.message = f"Edit: {options[index]}"
+            time.sleep(0.5)  # Pause before returning to menu
+
+def manual_control_menu():
+    """Function to handle manual controls."""
+    options = ['Take Picture Now', 'Water Now', 'Light On Now', 'Fan On Now', 'Back']
+    index = 0
+    lcd.clear()
+    lcd.message = f"Control: {options[index]}"
+    while True:
+        update = False
+        if lcd.up_button:
+            debounce(lambda: lcd.up_button)
+            index = (index - 1) % len(options)
+            update = True
+        elif lcd.down_button:
+            debounce(lambda: lcd.down_button)
+            index = (index + 1) % len(options)
+            update = True
+        if update:
+            lcd.message = f"Control: {options[index]}"
+        elif lcd.select_button:
+            debounce(lambda: lcd.select_button)
+            if options[index] == 'Take Picture Now':
+                # Add take picture functionality here
+                pass
+            elif options[index] == 'Water Now':
+                # Add water now functionality here
+                pass
+            elif options[index] == 'Light On Now':
+                # Add light on functionality here
+                pass
+            elif options[index] == 'Fan On Now':
+                # Add fan on functionality here
+                pass
+            elif options[index] == 'Back':
+                break
+            lcd.clear()
+            lcd.message = f"Control: {options[index]}"
+            time.sleep(0.5)  # Pause before returning to menu
 
 # Main loop
+lcd.clear()
+lcd.message = "Press Select to\nstart settings"
 while True:
-    lcd.clear()
-    lcd.message = "Press Select to\nenter settings"
     if lcd.select_button:
         debounce(lambda: lcd.select_button)
         main_menu()
+        lcd.clear()
+        lcd.message = "Press Select to\nstart settings"
+    time.sleep(0.2)  # Reduce the refresh rate to minimize flicker
