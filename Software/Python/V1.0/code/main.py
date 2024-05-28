@@ -13,6 +13,7 @@ import time as time2 #We already import time from datetime so time library is im
 import threading
 import json
 import os
+from plant_settings import load_plant_settings, save_plant_settings, Plant, config
 
 # Submodules import, these require files to be present in local dir
 from sensorfeed import feedread
@@ -25,67 +26,7 @@ from timecheck import is_time_between
 from timestrconvert import timestr
 from lcddispfunc import main_menu, lcd, debounce, lcd_menu_thread, set_lcd_color, manual_control_menu, manual_override
 
-# Import plant data used as a basis
-from addclass import PlantDef  # This import plant as a class, this is imported globally
-Plant = None
-
-# Function to load plant settings dynamically
-def load_plant_settings(filename="plant_settings.json"):
-    global Plant
-    try:
-        with open(filename, "r") as f:
-            data = json.load(f)
-        Plant = PlantDef(
-            name=data["name"],
-            dryValue=data["dryValue"],
-            maxTemp=data["maxTemp"],
-            maxHumid=data["maxHumid"],
-            waterVol=data["waterVol"],
-            checkTime=tuple(data["checkTime"]),
-            sunrise=tuple(data["sunrise"]),
-            sunset=tuple(data["sunset"]),
-            fanTime=data["fanTime"]
-        )
-    except FileNotFoundError:
-        Plant = PlantDef(
-            name='Default Plant',
-            dryValue=800,
-            maxTemp=30,
-            maxHumid=90,
-            waterVol=600,  # water volume in mL
-            checkTime=(9, 30),  # use 24h time!
-            sunrise=(7, 0),  # Cannot use 07 - leading zeroes not permitted in CheckTIme, sunrise, sunset
-            sunset=(17, 0),  # Note: All these are defined as tuple eg. (HH:MM) is a tuple of HH and MM
-            fanTime=30
-        )
-
-def reload_settings():
-    load_plant_settings()
-    update_schedules()
-
-def update_schedules():
-    global watersettime, sunrisesettime, sunsetsettime
-    watersettime = timestr(Plant.checkTime)
-    sunrisesettime = timestr(Plant.sunrise)
-    sunsetsettime = timestr(Plant.sunset)
-    schedule.clear()
-    schedule.every().hour.at(":15").do(run_threaded, EveryXX15)
-    schedule.every().hour.at(":25").do(run_threaded, EveryXX25)
-    schedule.every().hour.at(":35").do(run_threaded, EveryXX35)
-    schedule.every().day.at(watersettime).do(run_threaded, EverySETTIME)
-    schedule.every().day.at(sunrisesettime).do(run_threaded, EverySUNRISE)
-    schedule.every().day.at(sunsetsettime).do(run_threaded, EverySUNSET)
-
-def has_file_changed(filepath, last_modified_time):
-    current_modified_time = os.path.getmtime(filepath)
-    return current_modified_time != last_modified_time, current_modified_time
-
-def check_for_updates():
-    global Plant, last_modified_time
-    has_changed, new_modified_time = has_file_changed("plant_settings.json", last_modified_time)
-    if has_changed:
-        reload_settings()
-        last_modified_time = new_modified_time   
+load_plant_settings()
 
 # Multithreading
 def run_threaded(job_func):
@@ -93,12 +34,6 @@ def run_threaded(job_func):
     job_thread.start()
 
 # Function definitions moved before the schedule setup
-def EveryXX15():  # This schedule grouping runs at every quarter of hour
-import configparser
-
-config = configparser.ConfigParser()
-
-from lcddispfunc import main_menu, lcd, debounce, lcd_menu_thread, set_lcd_color
 
 ##############################################
 ################# ON BOOTUP ##################
@@ -359,11 +294,6 @@ def EverySUNSET():  # This should run every sunset time to turn off light
     except RuntimeError as e:
         set_lcd_color("error")  # Set LCD color to red on error
         print(f"Error in EverySUNSET: {e}")
-
-# Initialize Plant object from file
-load_plant_settings()
-last_modified_time = os.path.getmtime("plant_settings.json")
-update_schedules()
 
 ##############################################
 ################# ON BOOTUP ##################

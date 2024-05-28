@@ -2,7 +2,6 @@ import board
 import time
 from datetime import datetime
 from adafruit_character_lcd.character_lcd_rgb_i2c import Character_LCD_RGB_I2C
-from addclass import Plant  # Ensure this import statement matches your setup
 
 from watercontrol import autowater
 from fancontrol import fanon
@@ -16,6 +15,8 @@ import threading  # Add this import statement
 from lightcontrol import growlighton, growlightoff
 from fancontrol import fanon, fanoff
 from watercontrol import autowater, stopwater
+
+from plant_settings import save_plant_settings
 
 # Global variables for manual override and watering state
 manual_override = {
@@ -74,12 +75,13 @@ def adjust_parameter(parameter_name, step, min_val, max_val):
         elif lcd.select_button:
             debounce(lambda: lcd.select_button)
             setattr(Plant, parameter_name, value)
-            Plant.save_to_file()  # Save the settings
+            save_plant_settings()  # Save the settings to config file
             message = f"Set to {value}    "
             lcd.message = message
             time.sleep(1)  # Show the set message
             break
         time.sleep(0.2)  # Reduce refresh rate to minimize jitter
+
 def adjust_time_parameter(parameter_name):
     """Function to adjust time parameters (HH:MM)."""
     value = getattr(Plant, parameter_name)
@@ -110,11 +112,10 @@ def adjust_time_parameter(parameter_name):
         elif lcd.select_button:
             debounce(lambda: lcd.select_button)
             setattr(Plant, parameter_name, (hours, minutes))
-            Plant.save_to_file()  # Save the settings
+            save_plant_settings()  # Save the settings to config file
             message = f"Set to {hours:02d}:{minutes:02d}"
             lcd.message = message
             time.sleep(1)  # Show the set message
-            reload_settings()  # Reload settings and update schedules
             break
         time.sleep(0.2)  # Reduce refresh rate to minimize jitter
 
@@ -201,6 +202,7 @@ def irrigation_menu():
                 break
             display_menu(options, index)
             time.sleep(0.5)  # Pause before returning to menu
+
 def manual_control_menu():
     """Function to handle manual controls."""
     options = ['Take Picture Now', 'Water Now', 'Stop Watering Now', 'Light On Now', 'Light Off Now', 'Fan On Now', 'Fan Off Now', 'Back']
@@ -238,12 +240,15 @@ def manual_control_menu():
                 break
             display_menu(options, index)
             time.sleep(0.5)  # Pause before returning to menu
+
 def start_fan_thread():
     """Start the fan in a separate thread."""
     threading.Thread(target=control_fan, args=(True,)).start()
+
 def start_picture_thread():
     """Start the picture-taking process in a separate thread."""
     threading.Thread(target=control_picture).start()
+
 def start_watering_thread():
     """Start a thread for the watering process."""
     global watering_active
@@ -271,6 +276,7 @@ def control_light(turn_on):
         print(f"Error controlling light: {e}")
         lcd.message = f"Error: {e}"
         time.sleep(2)
+
 def control_picture():
     """Control the picture-taking process."""
     try:
@@ -281,6 +287,7 @@ def control_picture():
         print(f"Error taking picture: {e}")
         lcd.message = f"Error: {e}"
         time.sleep(2)
+
 def control_watering(start):
     """Control the watering system."""
     global manual_override, watering_active
@@ -327,6 +334,7 @@ def control_fan(turn_on):
         print(f"Error controlling fan: {e}")
         lcd.message = f"Error: {e}"
         time.sleep(2)
+
 def main_menu():
     """Function to navigate between different settings."""
     options = ['Edit Settings', 'Manual Control']
@@ -356,6 +364,10 @@ def main_menu():
 # Main
 
 def lcd_menu_thread():
+    lcd.clear()
+    # Test message to ensure proper initialization
+    lcd.message = "Test Message"
+    time.sleep(5)  # Display test message for 5 seconds
     lcd.clear()
     while True:
         current_time = datetime.now().strftime("%H:%M:%S")
