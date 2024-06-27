@@ -2,20 +2,14 @@ import board
 import time
 from datetime import datetime
 from adafruit_character_lcd.character_lcd_rgb_i2c import Character_LCD_RGB_I2C
-from addclass import Plant  # Ensure this import statement matches your setup
-
-from watercontrol import autowater
-from fancontrol import fanon
-from lightcontrol import growlighton, growlightoff
-from picamera import picam_capture
-
-import commentedconfigparser
-import threading  # Add this import statement
+import configparser
+import threading
 
 # Import control functions
 from lightcontrol import growlighton, growlightoff
 from fancontrol import fanon, fanoff
 from watercontrol import autowater, stopwater
+from picamera import picam_capture
 
 # Global variables for manual override and watering state
 manual_override = {
@@ -26,7 +20,7 @@ manual_override = {
 
 watering_active = False
 
-config = commentedconfigparser.CommentedConfigParser()
+config = configparser.ConfigParser()
 
 i2c = board.I2C()  # uses board.SCL and board.SDA
 lcd = Character_LCD_RGB_I2C(i2c, 16, 2)
@@ -53,9 +47,57 @@ def debounce(button):
             break
     return button_state
 
+def display_menu(options, index):
+    """Helper function to display menu options with the current selection on the bottom line."""
+    lcd.clear()
+    lcd.message = f"Select Option:\n{options[index][:16]}"
+
+def edit_settings_menu():
+    """Function to navigate and edit settings."""
+    options = ['System Time', 'Sunrise Time', 'Sunset Time', 'Irrigation', 'Temp Setpoint', 'Humidity Setpoint', 'Camera Yes/No', 'Back']
+    index = 0
+    display_menu(options, index)
+    while True:
+        update = False
+        if lcd.up_button:
+            debounce(lambda: lcd.up_button)
+            index = (index - 1) % len(options)
+            update = True
+        elif lcd.down_button:
+            debounce(lambda: lcd.down_button)
+            index = (index + 1) % len(options)
+            update = True
+        if update:
+            display_menu(options, index)
+        elif lcd.select_button:
+            debounce(lambda: lcd.select_button)
+            if options[index] == 'System Time':
+                adjust_time_parameter('checkTime')
+            elif options[index] == 'Sunrise Time':
+                adjust_time_parameter('sunrise')
+            elif options[index] == 'Sunset Time':
+                adjust_time_parameter('sunset')
+            elif options[index] == 'Irrigation':
+                irrigation_menu()
+            elif options[index] == 'Temp Setpoint':
+                adjust_parameter('maxTemp', 1, 0, 50)
+            elif options[index] == 'Humidity Setpoint':
+                adjust_parameter('maxHumid', 5, 0, 100)
+            elif options[index] == 'Camera Yes/No':
+                config.read("grobot_cfg.ini")
+                cam_set = config['PICAMERA']['CameraSet']
+                config['PICAMERA']['CameraSet'] = '0' if cam_set == '1' else '1'
+                with open('grobot_cfg.ini', 'w') as configfile:
+                    config.write(configfile)
+            elif options[index] == 'Back':
+                break
+            display_menu(options, index)
+            time.sleep(0.5)  # Pause before returning to menu
+
 def adjust_parameter(parameter_name, step, min_val, max_val):
     """General function to adjust a numerical parameter."""
-    value = getattr(Plant, parameter_name)
+    config.read("grobot_cfg.ini")
+    value = int(config['PLANTCFG'][parameter_name])
     message = f"{parameter_name}: {value}  "
     lcd.message = message
     while True:
@@ -73,16 +115,19 @@ def adjust_parameter(parameter_name, step, min_val, max_val):
             lcd.message = message
         elif lcd.select_button:
             debounce(lambda: lcd.select_button)
-            setattr(Plant, parameter_name, value)
-            Plant.save_to_file()  # Save the settings
+            config['PLANTCFG'][parameter_name] = str(value)
+            with open('grobot_cfg.ini', 'w') as configfile:
+                config.write(configfile)
             message = f"Set to {value}    "
             lcd.message = message
             time.sleep(1)  # Show the set message
             break
         time.sleep(0.2)  # Reduce refresh rate to minimize jitter
+
 def adjust_time_parameter(parameter_name):
     """Function to adjust time parameters (HH:MM)."""
-    value = getattr(Plant, parameter_name)
+    config.read("grobot_cfg.ini")
+    value = [int(x) for x in config['PLANTCFG'][parameter_name].split(",")]
     hours, minutes = value
     message = f"{parameter_name}: {hours:02d}:{minutes:02d}  "
     lcd.message = message
@@ -109,68 +154,14 @@ def adjust_time_parameter(parameter_name):
             lcd.message = message
         elif lcd.select_button:
             debounce(lambda: lcd.select_button)
-            setattr(Plant, parameter_name, (hours, minutes))
-            Plant.save_to_file()  # Save the settings
+            config['PLANTCFG'][parameter_name] = f"{hours},{minutes}"
+            with open('grobot_cfg.ini', 'w') as configfile:
+                config.write(configfile)
             message = f"Set to {hours:02d}:{minutes:02d}"
             lcd.message = message
             time.sleep(1)  # Show the set message
-            reload_settings()  # Reload settings and update schedules
             break
         time.sleep(0.2)  # Reduce refresh rate to minimize jitter
-
-def display_menu(options, index):
-    """Helper function to display menu options with the current selection on the bottom line."""
-    lcd.clear()
-    lcd.message = f"Select Option:\n{options[index][:16]}"
-
-def edit_settings_menu():
-    """Function to navigate and edit settings."""
-    options = ['System Time', 'Sunrise Time', 'Sunset Time', 'Irrigation', 'Temp Setpoint', 'Humidity Setpoint', 'Camera Yes/No', 'Back']
-    index = 0
-    display_menu(options, index)
-    while True:
-        update = False
-        if lcd.up_button:
-            debounce(lambda: lcd.up_button)
-            index = (index - 1) % len(options)
-            update = True
-        elif lcd.down_button:
-            debounce(lambda: lcd.down_button)
-            index = (index + 1) % len(options)
-            update = True
-        if update:
-            display_menu(options, index)
-        elif lcd.select_button:
-            debounce(lambda: lcd.select_button)
-            if options[index] == 'System Time':
-                adjust_time_parameter('checkTime')  # Adjust time
-            elif options[index] == 'Sunrise Time':
-                adjust_time_parameter('sunrise')  # Adjust time
-            elif options[index] == 'Sunset Time':
-                adjust_time_parameter('sunset')  # Adjust time
-            elif options[index] == 'Irrigation':
-                irrigation_menu()
-            elif options[index] == 'Temp Setpoint':
-                adjust_parameter('maxTemp', 1, 0, 50)
-            elif options[index] == 'Humidity Setpoint':
-                adjust_parameter('maxHumid', 5, 0, 100)
-            elif options[index] == 'Camera Yes/No':
-                ##########################
-                ## NEEDS ERROR HANDLING ##
-                ##########################
-                config.read("grobot_cfg.ini") #Read the config file
-                match config['PICAMERA']['CameraSet']: #Match the config case to toggle between 0 or 1
-                    case '0':
-                        config['PICAMERA']['CameraSet'] = '1'
-                    case '1':
-                        config['PICAMERA']['CameraSet'] = '0'
-                with open('grobot_cfg.ini', 'w') as configfile: #Write the settings back to config
-                    config.write(configfile)
-                pass
-            elif options[index] == 'Back':
-                break
-            display_menu(options, index)
-            time.sleep(0.5)  # Pause before returning to menu
 
 def irrigation_menu():
     """Function to navigate and edit irrigation settings."""
@@ -196,11 +187,12 @@ def irrigation_menu():
             elif options[index] == 'Water Vol':
                 adjust_parameter('waterVol', 10, 0, 1000)
             elif options[index] == 'Watering Time':
-                adjust_time_parameter('checkTime')  # Adjust time
+                adjust_time_parameter('checkTime')
             elif options[index] == 'Back':
                 break
             display_menu(options, index)
             time.sleep(0.5)  # Pause before returning to menu
+
 def manual_control_menu():
     """Function to handle manual controls."""
     options = ['Take Picture Now', 'Water Now', 'Stop Watering Now', 'Light On Now', 'Light Off Now', 'Fan On Now', 'Fan Off Now', 'Back']
@@ -238,12 +230,15 @@ def manual_control_menu():
                 break
             display_menu(options, index)
             time.sleep(0.5)  # Pause before returning to menu
+
 def start_fan_thread():
     """Start the fan in a separate thread."""
     threading.Thread(target=control_fan, args=(True,)).start()
+
 def start_picture_thread():
     """Start the picture-taking process in a separate thread."""
     threading.Thread(target=control_picture).start()
+
 def start_watering_thread():
     """Start a thread for the watering process."""
     global watering_active
@@ -255,22 +250,22 @@ def control_light(turn_on):
     global manual_override
     try:
         if turn_on:
-            print("Manual override: Turning light on.")
+            print("Turning on the light...")  # Debugging line
             result = growlighton()
             manual_override["light"] = True
-            print(f"growlighton() result: {result}")
             lcd.message = "Light On" if result else "Light On Failed"
         else:
-            print("Manual override: Turning light off.")
+            print("Turning off the light...")  # Debugging line
             result = growlightoff()
             manual_override["light"] = False
-            print(f"growlightoff() result: {result}")
             lcd.message = "Light Off" if result else "Light Off Failed"
+        print(f"Light control result: {result}")  # Debugging line
         time.sleep(2)  # Keep the message for 2 seconds
     except Exception as e:
-        print(f"Error controlling light: {e}")
+        print(f"Error in control_light: {e}")  # Debugging line
         lcd.message = f"Error: {e}"
         time.sleep(2)
+
 def control_picture():
     """Control the picture-taking process."""
     try:
@@ -278,31 +273,32 @@ def control_picture():
         lcd.message = "Picture Taken" if result else "Pic Failed"
         time.sleep(2)  # Keep the message for 2 seconds
     except Exception as e:
-        print(f"Error taking picture: {e}")
         lcd.message = f"Error: {e}"
         time.sleep(2)
+
 def control_watering(start):
     """Control the watering system."""
     global manual_override, watering_active
     try:
+        config.read("grobot_cfg.ini")  # Read the configuration file
         if start:
-            print("Manual override: Starting watering.")
-            result = autowater(Plant.waterVol)
+            print("Starting watering...")  # Debugging line
+            result = autowater(int(config['PLANTCFG']['waterVol']))
             manual_override["watering"] = True
-            print(f"autowater() result: {result}")
             lcd.message = "Watering" if result == 1 else "Watering Failed"
             if result == 2:
                 lcd.message = "Low Water"
+            print(f"Watering control result: {result}")  # Debugging line
         else:
-            print("Manual override: Stopping watering.")
+            print("Stopping watering...")  # Debugging line
             result = stopwater()
             manual_override["watering"] = False
             watering_active = False
-            print(f"stopwater() result: {result}")
             lcd.message = "Water Stopped" if result else "Stop Failed"
+            print(f"Water stopping result: {result}")  # Debugging line
         time.sleep(2)  # Keep the message for 2 seconds
     except Exception as e:
-        print(f"Error controlling watering: {e}")
+        print(f"Error in control_watering: {e}")  # Debugging line
         lcd.message = f"Error: {e}"
         time.sleep(2)
 
@@ -310,23 +306,25 @@ def control_fan(turn_on):
     """Control the fan."""
     global manual_override
     try:
+        config.read("grobot_cfg.ini")  # Read the configuration file
         if turn_on:
-            print(f"Manual override: Turning fan on.")
-            result = fanon(Plant.fanTime)
+            print("Turning on the fan...")  # Debugging line
+            result = fanon(int(config['PLANTCFG']['fanTime']))
             manual_override["fan"] = True
-            print(f"fanon() result: {result}")
             lcd.message = "Fan On" if result else "Fan On Failed"
+            print(f"Fan control result: {result}")  # Debugging line
         else:
-            print("Manual override: Turning fan off.")
+            print("Turning off the fan...")  # Debugging line
             result = fanoff()
             manual_override["fan"] = False
-            print(f"fanoff() result: {result}")
             lcd.message = "Fan Off" if result else "Fan Off Failed"
+            print(f"Fan stopping result: {result}")  # Debugging line
         time.sleep(2)  # Keep the message for 2 seconds
     except Exception as e:
-        print(f"Error controlling fan: {e}")
+        print(f"Error in control_fan: {e}")  # Debugging line
         lcd.message = f"Error: {e}"
         time.sleep(2)
+
 def main_menu():
     """Function to navigate between different settings."""
     options = ['Edit Settings', 'Manual Control']
@@ -352,8 +350,6 @@ def main_menu():
                 manual_control_menu()
             display_menu(options, index)
             time.sleep(0.5)  # Pause before returning to menu
-
-# Main
 
 def lcd_menu_thread():
     lcd.clear()

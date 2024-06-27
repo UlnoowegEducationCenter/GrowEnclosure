@@ -20,28 +20,26 @@ s1, s2, s3, s4, s5, s6, b1, ths, sms = diop[0], diop[1], diop[2], diop[3], diop[
 
 def autowater(wvol):  # define autowater func with water volume input in mL
     try:  # check water level
-        # Note that the float switch's reed switch is open in the bottom float position (low water) and closed when in the top position (high water)
-        # Note that b1 (GPIO10 / Pin 19) is set with a pull-up resistor
-        if b1.value == False:
-            pass 
-        elif b1.value == True:  # if the water level is low
+        if b1.value:  # if the water level is low
+            print("Low water level detected")  # Debugging line
             return 2
         else:
-            return 0
-    
-        wrate = 28.5  # rate of watering in mL/s
-        t = wvol/wrate  # time required to water in seconds
-        s1.value = True  # turns on pump
-        time.sleep(t)  # sleep for t seconds while pump is on
-        s1.value = False  # turns off pump
-        return 1
-    
-    except:
+            print(f"Starting watering for {wvol} mL")  # Debugging line
+            wrate = 28.5  # rate of watering in mL/s
+            t = wvol / wrate  # time required to water in seconds
+            s1.value = True  # turns on pump
+            time.sleep(t)  # sleep for t seconds while pump is on
+            s1.value = False  # turns off pump
+            return 1
+    except Exception as e:
+        print(f"Error in autowater: {e}")  # Debugging line
         return 0
 
 def stopwater():  # define function to stop watering
     try:
+        print("Stopping watering")  # Debugging line
         s1.value = False  # turns off pump
         return 1
-    except:
+    except Exception as e:
+        print(f"Error in stopwater: {e}")  # Debugging line
         return 0

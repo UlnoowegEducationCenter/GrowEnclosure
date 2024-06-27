@@ -1,0 +1,13 @@
+{
+    "Adafruit_IO" : [
+        {
+            "AIO_USERNAME" : "AIO_Username",
+            "AIO_KEY" : "AIO_Key"
+        }
+    ],
+    "Enclosure" : [
+        {
+            "Serial" : "grobot-xxx-yyy"
+        }
+    ]
+}
