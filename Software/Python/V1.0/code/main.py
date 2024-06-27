@@ -20,12 +20,9 @@ from lightcontrol import growlighton, growlightoff
 from picamera import picam_capture
 from dataout import excelout
 from timecheck import is_time_between
-from timestrconvert import timestr
-import configparser
-
-config = configparser.ConfigParser()
-
-from lcddispfunc import main_menu, lcd, debounce, lcd_menu_thread, set_lcd_color
+from config import get_plant_settings, read_config
+from lcddispfunc import lcd_menu_thread, set_lcd_color
+import state  # Import the global state module
 
 ##############################################
 ################# ON BOOTUP ##################
@@ -41,31 +38,21 @@ lcd_thread.start()
 
 # Starts with reading values from sensor
 try:
-    ReadVal = feedread() # T RH SRH in order
-    if isinstance(ReadVal, tuple) == True: # Check if there is an actual value from feedread
+    state.ReadVal = feedread() # T RH SRH in order
+    if isinstance(state.ReadVal, tuple) == True: # Check if there is an actual value from feedread
         pass
-    elif ReadVal == 0: # If returns 0 there is a failure in feedread
+    elif state.ReadVal == 0: # If returns 0 there is a failure in feedread
         set_lcd_color("error")  # Set LCD color to red on error
         raise RuntimeError('SENSOR FAIL') # Force code to quit and systemd will force it to restart
     else: # For any unknown error
         set_lcd_color("error")  # Set LCD color to red on error
         raise RuntimeError('UKNOWN FAILURE')
     
-    #Now do an initial read of the configuration value
-    ################## START DEFAULT READ CONFIG BLOCK #################
-    config.read("grobot_cfg.ini")
-    sunrise = [int(x) for x in config['PLANTCFG']['sunrise'].split(",")]
-    sunset = [int(x) for x in config['PLANTCFG']['sunset'].split(",")]
-    checkTime = [int(x) for x in config['PLANTCFG']['checkTime'].split(",")]
-    dryValue = int(config['PLANTCFG']['dryValue'])
-    maxTemp = int(config['PLANTCFG']['maxTemp'])
-    maxHumid = int(config['PLANTCFG']['maxHumid'])
-    waterVol = int(config['PLANTCFG']['waterVol'])
-    fanTime = int(config['PLANTCFG']['fanTime'])
-    ################## END DEFAULT READ CONFIG BLOCK #################
+    # Now do an initial read of the configuration value
+    settings = get_plant_settings()
 
     # Now check if light needs to be on or off
-    if is_time_between(time(sunrise[0], sunrise[1]), time(sunset[0], sunset[1])) == True:
+    if is_time_between(time(settings['sunrise'][0], settings['sunrise'][1]), time(settings['sunset'][0], settings['sunset'][1])) == True:
         grstatus = growlighton()
         if grstatus == 1:
             pass
@@ -75,7 +62,7 @@ try:
         else: # For any unknown error
             set_lcd_color("error")  # Set LCD color to red on error
             raise RuntimeError('UKNOWN FAILURE')
-    elif is_time_between(time(sunrise[0], sunrise[1]), time(sunset[0], sunset[1])) == False:
+    elif is_time_between(time(settings['sunrise'][0], settings['sunrise'][1]), time(settings['sunset'][0], settings['sunset'][1])) == False:
         grstatus = growlightoff()
         if grstatus == 1:
             pass
@@ -90,8 +77,8 @@ try:
         raise RuntimeError('UKNOWN FAILURE')
 
     # Check if internal humidity or temperature is too high and the fan needs to be on
-    if ReadVal[0] > maxTemp or ReadVal[1] > maxHumid:
-        fanstatus = fanon(fanTime)
+    if state.ReadVal[0] > settings['maxTemp'] or state.ReadVal[1] > settings['maxHumid']:
+        fanstatus = fanon(settings['fanTime'])
         if fanstatus == 1:
             pass
         elif fanstatus == 0:
@@ -100,7 +87,7 @@ try:
         else:
             set_lcd_color("error")  # Set LCD color to red on error
             raise RuntimeError('UKNOWN FAILURE')
-    elif ReadVal[0] <= maxTemp and ReadVal[1] <= maxHumid:
+    elif state.ReadVal[0] <= settings['maxTemp'] and state.ReadVal[1] <= settings['maxHumid']:
         pass
     else:
         set_lcd_color("error")  # Set LCD color to red on error
@@ -116,27 +103,15 @@ except RuntimeError as e:
 
 def EveryXX15(): # This schedule grouping runs at every quarter of hour
     try:
-
-        ################## START DEFAULT READ CONFIG BLOCK #################
-        config.read("grobot_cfg.ini")
-        sunrise = [int(x) for x in config['PLANTCFG']['sunrise'].split(",")]
-        sunset = [int(x) for x in config['PLANTCFG']['sunset'].split(",")]
-        checkTime = [int(x) for x in config['PLANTCFG']['checkTime'].split(",")]
-        dryValue = int(config['PLANTCFG']['dryValue'])
-        maxTemp = int(config['PLANTCFG']['maxTemp'])
-        maxHumid = int(config['PLANTCFG']['maxHumid'])
-        waterVol = int(config['PLANTCFG']['waterVol'])
-        fanTime = int(config['PLANTCFG']['fanTime'])
-        ################## END DEFAULT READ CONFIG BLOCK #################
-
+        settings = get_plant_settings()
         set_lcd_color("in_progress")  # Set LCD color to blue when in progress
 
         # This should read value from sensor and turn fan on or off
         # Read value from sensor
-        ReadVal = feedread() # T RH SRH in order
-        if isinstance(ReadVal, tuple) == True: # Check if there is an actual value from feedread
+        state.ReadVal = feedread() # T RH SRH in order
+        if isinstance(state.ReadVal, tuple) == True: # Check if there is an actual value from feedread
             pass
-        elif ReadVal == 0: # If returns 0 there is a failure in feedread
+        elif state.ReadVal == 0: # If returns 0 there is a failure in feedread
             set_lcd_color("error")  # Set LCD color to red on error
             raise RuntimeError('SENSOR FAIL') # Force code to quit and systemd will force it to restart
         else: # For any unknown error
@@ -144,8 +119,8 @@ def EveryXX15(): # This schedule grouping runs at every quarter of hour
             raise RuntimeError('UKNOWN FAILURE')
 
         # Turn on fan if temp or humidity exceeds the limit 
-        if ReadVal[0] > maxTemp or ReadVal[1] > maxHumid:
-            fanstatus = fanon(fanTime)
+        if state.ReadVal[0] > settings['maxTemp'] or state.ReadVal[1] > settings['maxHumid']:
+            fanstatus = fanon(settings['fanTime'])
             if fanstatus == 1:
                 pass
             elif fanstatus == 0:
@@ -154,7 +129,7 @@ def EveryXX15(): # This schedule grouping runs at every quarter of hour
             else:
                 set_lcd_color("error")  # Set LCD color to red on error
                 raise RuntimeError('UKNOWN FAILURE')
-        elif ReadVal[0] <= maxTemp and ReadVal[1] <= maxHumid:
+        elif state.ReadVal[0] <= settings['maxTemp'] and state.ReadVal[1] <= settings['maxHumid']:
             pass
         else:
             set_lcd_color("error")  # Set LCD color to red on error
@@ -168,27 +143,15 @@ def EveryXX15(): # This schedule grouping runs at every quarter of hour
 
 def EverySETTIME(): # This runs every settime read from addclass.py
     try:
-
-        ################## START DEFAULT READ CONFIG BLOCK #################
-        config.read("grobot_cfg.ini")
-        sunrise = [int(x) for x in config['PLANTCFG']['sunrise'].split(",")]
-        sunset = [int(x) for x in config['PLANTCFG']['sunset'].split(",")]
-        checkTime = [int(x) for x in config['PLANTCFG']['checkTime'].split(",")]
-        dryValue = int(config['PLANTCFG']['dryValue'])
-        maxTemp = int(config['PLANTCFG']['maxTemp'])
-        maxHumid = int(config['PLANTCFG']['maxHumid'])
-        waterVol = int(config['PLANTCFG']['waterVol'])
-        fanTime = int(config['PLANTCFG']['fanTime'])
-        ################## END DEFAULT READ CONFIG BLOCK #################
-
+        settings = get_plant_settings()
         set_lcd_color("in_progress")  # Set LCD color to blue when in progress
 
         # This should read value from sensor and autowater if Soil moisture too low
         # Read value from sensor
-        ReadVal = feedread() # T RH SRH in order
-        if isinstance(ReadVal, tuple) == True: # Check if there is an actual value from feedread
+        state.ReadVal = feedread() # T RH SRH in order
+        if isinstance(state.ReadVal, tuple) == True: # Check if there is an actual value from feedread
             pass
-        elif ReadVal == 0: # If returns 0 there is a failure in feedread
+        elif state.ReadVal == 0: # If returns 0 there is a failure in feedread
             set_lcd_color("error")  # Set LCD color to red on error
             raise RuntimeError('SENSOR FAIL') # Force code to quit and systemd will force it to restart
         else: # For any unknown error
@@ -196,8 +159,8 @@ def EverySETTIME(): # This runs every settime read from addclass.py
             raise RuntimeError('UKNOWN FAILURE')
 
         # Now water plant if soil too dry
-        if ReadVal[2] <= dryValue:
-            wtrstatus = autowater(waterVol)
+        if state.ReadVal[2] <= settings['dryValue']:
+            wtrstatus = autowater(settings['waterVol'])
             if wtrstatus == 1:
                 pass
             elif wtrstatus == 2:
@@ -209,7 +172,7 @@ def EverySETTIME(): # This runs every settime read from addclass.py
             else:
                 set_lcd_color("error")  # Set LCD color to red on error
                 raise RuntimeError('UKNOWN FAILURE')
-        elif ReadVal[2] > dryValue:
+        elif state.ReadVal[2] > settings['dryValue']:
             pass
         else:
             set_lcd_color("error")  # Set LCD color to red on error
@@ -223,15 +186,14 @@ def EverySETTIME(): # This runs every settime read from addclass.py
 
 def EveryXX25(): # This code runs at every 25 minute mark of the hour
     try:
-
         set_lcd_color("in_progress")  # Set LCD color to blue when in progress
 
         # Read value from sensor and write it out to excel
         # Read value from sensor
-        ReadVal = feedread() # T RH SRH in order
-        if isinstance(ReadVal, tuple) == True: # Check if there is an actual value from feedread
+        state.ReadVal = feedread() # T RH SRH in order
+        if isinstance(state.ReadVal, tuple) == True: # Check if there is an actual value from feedread
             pass
-        elif ReadVal == 0: # If returns 0 there is a failure in feedread
+        elif state.ReadVal == 0: # If returns 0 there is a failure in feedread
             set_lcd_color("error")  # Set LCD color to red on error
             raise RuntimeError('SENSOR FAIL') # Force code to quit and systemd will force it to restart
         else: # For any unknown error
@@ -239,7 +201,7 @@ def EveryXX25(): # This code runs at every 25 minute mark of the hour
             raise RuntimeError('UKNOWN FAILURE')
 
         # Write data out to excel file
-        excelstatus = excelout(ReadVal[0], ReadVal[1], ReadVal[2])
+        excelstatus = excelout(state.ReadVal[0], state.ReadVal[1], state.ReadVal[2])
         if excelstatus == 1:
             pass
         elif excelstatus == 2:
@@ -260,7 +222,6 @@ def EveryXX25(): # This code runs at every 25 minute mark of the hour
 
 def EveryXX35(): # Runs every 35 minute mark of the hour
     try:
-
         set_lcd_color("in_progress")  # Set LCD color to blue when in progress
 
         # Take picture with pi camera
@@ -285,7 +246,6 @@ def EveryXX35(): # Runs every 35 minute mark of the hour
 
 def EverySUNRISE(): # This should run every sunrise time to turn on the light
     try:
-
         set_lcd_color("in_progress")  # Set LCD color to blue when in progress
 
         grstatus = growlighton()
@@ -306,7 +266,6 @@ def EverySUNRISE(): # This should run every sunrise time to turn on the light
 
 def EverySUNSET(): # This should run every sunset time to turn off light
     try:
-
         set_lcd_color("in_progress")  # Set LCD color to blue when in progress
 
         grstatus = growlightoff()
@@ -330,27 +289,16 @@ def run_threaded(job_func):
     job_thread = threading.Thread(target=job_func)
     job_thread.start()
 
-#This is now the main running thread, one while loop that spawns subthreads as needed.
+# This is now the main running thread, one while loop that spawns subthreads as needed.
 while 1:
-    ################## START DEFAULT READ CONFIG BLOCK #################
-    config.read("grobot_cfg.ini")
-    sunrise = [int(x) for x in config['PLANTCFG']['sunrise'].split(",")]
-    sunset = [int(x) for x in config['PLANTCFG']['sunset'].split(",")]
-    checkTime = [int(x) for x in config['PLANTCFG']['checkTime'].split(",")]
-    dryValue = int(config['PLANTCFG']['dryValue'])
-    maxTemp = int(config['PLANTCFG']['maxTemp'])
-    maxHumid = int(config['PLANTCFG']['maxHumid'])
-    waterVol = int(config['PLANTCFG']['waterVol'])
-    fanTime = int(config['PLANTCFG']['fanTime'])
-    ################## END DEFAULT READ CONFIG BLOCK #################
-
+    settings = get_plant_settings()
     currhour = datetime.now().hour
     currminute = datetime.now().minute
     currsecond = datetime.now().second
 
     currtime = [datetime.now().hour, datetime.now().minute, datetime.now().second]
 
-    #The first case only match function for minutes
+    # The first case only match function for minutes
     match currminute:
         case 15:
             run_threaded(EveryXX15)
@@ -361,21 +309,21 @@ while 1:
         case _:
             pass
     
-    #This one requires matching both hour and minute
-    if currhour == sunset[0] and currminute == sunset[1]:
+    # This one requires matching both hour and minute
+    if currhour == settings['sunset'][0] and currminute == settings['sunset'][1]:
         run_threaded(EverySUNSET)
-    if currhour == sunrise[0] and currminute == sunrise[1]:
+    if currhour == settings['sunrise'][0] and currminute == settings['sunrise'][1]:
         run_threaded(EverySUNRISE)
-    if currhour == checkTime[0] and currminute == checkTime[1]:
+    if currhour == settings['checkTime'][0] and currminute == settings['checkTime'][1]:
         run_threaded(EverySETTIME)
     
-#Implement logic to sleep until next tick
+    # Implement logic to sleep until next tick
     currtickminute = datetime.now().minute
  
-    if currtickminute == currminute: #If we are still in the same minute as initial time check, sleep until minute change
+    if currtickminute == currminute: # If we are still in the same minute as initial time check, sleep until minute change
         tsleep = 61 - currtickminute
         time2.sleep(tsleep)
-    elif currtickminute > currminute: #Immediately rerun loop if current tick is larger than initial time set during update
+    elif currtickminute > currminute: # Immediately rerun loop if current tick is larger than initial time set during update
         pass
     else:
-        raise RuntimeError('TIME EXCEPTION') #Time anomaly
+        raise RuntimeError('TIME EXCEPTION') # Time anomaly
