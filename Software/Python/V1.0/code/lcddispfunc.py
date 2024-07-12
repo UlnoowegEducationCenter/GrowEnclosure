@@ -56,6 +56,9 @@ def clear_and_return_to_menu():
     lcd.clear()
     main_menu()
 
+
+
+# Future feature, remove the delay of 15 seconds. 
 def edit_settings_menu():
     """Function to navigate and edit settings."""
     options = ['System Time', 'Sunrise Time', 'Sunset Time', 'Irrigation', 'Temp Setpoint', 'Humidity Setpoint', 'Camera Yes/No', 'Back']
