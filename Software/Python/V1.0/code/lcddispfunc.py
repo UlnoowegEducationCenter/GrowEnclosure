@@ -11,6 +11,7 @@ from timecheck import is_time_between
 import state  # Import the global state module
 from datetime import datetime, time as datetime_time
 import subprocess  # Import for setting the system time
+from config import get_plant_settings
 
 # Global variables for manual override and watering state
 manual_override = {
@@ -53,12 +54,10 @@ def display_menu(options, index):
 
 def clear_and_return_to_menu():
     """Clear the LCD and return to the main menu."""
+    apply_settings()  # Ensure the latest settings are applied
     lcd.clear()
     main_menu()
 
-
-
-# Future feature, remove the delay of 15 seconds. 
 def edit_settings_menu():
     """Function to navigate and edit settings."""
     options = ['System Time', 'Sunrise Time', 'Sunset Time', 'Irrigation', 'Temp Setpoint', 'Humidity Setpoint', 'Camera Yes/No', 'Back']
@@ -94,6 +93,7 @@ def edit_settings_menu():
                 cfg = config.read_config()
                 cam_set = cfg['PICAMERA']['CameraSet']
                 config.update_config('PICAMERA', 'CameraSet', '0' if cam_set == '1' else '1')
+                apply_settings()  # Apply the camera setting change
             elif options[index] == 'Back':
                 clear_and_return_to_menu()
                 break
@@ -123,6 +123,7 @@ def adjust_parameter(parameter_name, step, min_val, max_val, display_name):
         elif lcd.select_button:
             debounce(lambda: lcd.select_button)
             config.update_config('PLANTCFG', parameter_name, value)
+            apply_settings()  # Apply the parameter change
             lcd.clear()
             message = f"Set to:\n{value}"
             lcd.message = message
@@ -163,6 +164,7 @@ def adjust_time_parameter(parameter_name, display_name):
         elif lcd.select_button:
             debounce(lambda: lcd.select_button)
             config.update_config('PLANTCFG', parameter_name, f"{hours},{minutes}")
+            apply_settings()  # Apply the time parameter change
             lcd.clear()
             message = f"Set to:\n{hours:02d}:{minutes:02d}"
             lcd.message = message
@@ -204,6 +206,7 @@ def adjust_system_time(display_name):
             new_time = f"{hours:02d}:{minutes:02d}:00"
             try:
                 subprocess.run(["sudo", "date", f"--set={new_time}"], check=True)
+                apply_settings()  # Apply the system time change
                 lcd.clear()
                 message = f"Time Set to:\n{new_time}"
                 lcd.message = message
@@ -365,6 +368,16 @@ def control_watering(start):
         lcd.message = f"Error: {e}"
         time.sleep(2)
 
+def return_to_initial_screen():
+    """Function to display the initial LCD screen with time and prompt."""
+    while True:
+        current_time = datetime.now().strftime("%H:%M:%S")
+        lcd.message = f"{current_time}\nPress Select to start"
+        if lcd.select_button:
+            debounce(lambda: lcd.select_button)
+            break  # Exit the loop when the select button is pressed
+        time.sleep(1)  # Refresh the time every second
+
 def control_fan(turn_on):
     """Control the fan."""
     global manual_override
@@ -392,9 +405,19 @@ def control_fan(turn_on):
         time.sleep(2)
 
 def apply_settings():
-    """Apply the settings to the hardware in real-time."""
-    # This function can be left empty if we don't want to trigger any hardware changes
-    pass
+    global settings
+    settings = get_plant_settings()  # Re-read the latest settings from the config file
+
+    # Immediately apply the settings that require real-time updates
+    if is_time_between(datetime_time(settings['sunrise'][0], settings['sunrise'][1]), datetime_time(settings['sunset'][0], settings['sunset'][1])):
+        growlighton()
+    else:
+        growlightoff()
+
+    if state.ReadVal[0] > settings['maxTemp'] or state.ReadVal[1] > settings['maxHumid']:
+        fanon(settings['fanTime'])
+    else:
+        fanoff()
 
 def main_menu():
     """Function to navigate between different settings."""
@@ -422,6 +445,8 @@ def main_menu():
             elif options[index] == 'Back':
                 lcd.clear()
                 break  # Exit to main screen
+                # Return to the initial LCD load page with time display
+                return_to_initial_screen()
             display_menu(options, index)
             time.sleep(0.5)  # Pause before returning to menu
 

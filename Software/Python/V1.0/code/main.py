@@ -21,7 +21,7 @@ from picamera import picam_capture
 from dataout import excelout
 from timecheck import is_time_between
 from config import get_plant_settings, read_config
-from lcddispfunc import lcd_menu_thread, set_lcd_color
+from lcddispfunc import lcd_menu_thread, set_lcd_color, apply_settings
 import state  # Import the global state module
 
 ##############################################
@@ -291,6 +291,7 @@ def run_threaded(job_func):
 
 # This is now the main running thread, one while loop that spawns subthreads as needed.
 while 1:
+    apply_settings()  # Ensure settings are applied every loop
     settings = get_plant_settings()
     currhour = datetime.now().hour
     currminute = datetime.now().minute
